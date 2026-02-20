@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Management Systems GMA Screening</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <h1>Management Systems GMA Screening</h1>
+      <p>Management-focused assessment with food and beverage knowledge, systems design, and self-directed execution.</p>
+    </header>
+
+    <section id="setup" class="card">
+      <h2>Candidate Setup</h2>
+      <div class="grid">
+        <label>Candidate Name
+          <input id="candidateName" type="text" placeholder="Full name" />
+        </label>
+        <label>Email
+          <input id="candidateEmail" type="email" placeholder="name@email.com" />
+        </label>
+      </div>
+      <p class="small">50 questions. Time limit: 45 minutes. No calculator, no internet/AI tools. One answer per question.</p>
+      <p class="small">Competency gates: F&B knowledge, systems design, and project execution ownership.</p>
+      <button id="startBtn">Start Assessment</button>
+    </section>
+
+    <section id="test" class="card hidden">
+      <div class="topbar">
+        <h2>Assessment</h2>
+        <div id="timer" class="timer">45:00</div>
+      </div>
+      <form id="testForm"></form>
+      <div class="actions">
+        <button id="submitBtn" type="button">Submit Test</button>
+      </div>
+    </section>
+
+    <section id="results" class="card hidden"></section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
