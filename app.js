@@ -48,6 +48,34 @@ const TRAIT_META = {
   WG_T: { label: "Tenacity", model: "genius" }
 };
 
+const MBTI_BALANCE_MARGIN = 8;
+const DISC_BLEND_MARGIN = 8;
+
+const DISC_STYLE_LABELS = {
+  D: "Driver",
+  I_DISC: "Promoter",
+  S_DISC: "Stabilizer",
+  C: "Analyzer"
+};
+
+const STRENGTHS_PAIR_LABELS = {
+  EXEC_INFL: "Execution Influencer",
+  EXEC_REL: "Team Builder",
+  EXEC_STRAT: "Strategic Executor",
+  INFL_REL: "People Mobilizer",
+  INFL_STRAT: "Vision Influencer",
+  REL_STRAT: "Collaborative Strategist"
+};
+
+const GENIUS_PAIR_LABELS = {
+  WG_D_WG_I: "Innovation Evaluator",
+  WG_D_WG_T: "Quality Finisher",
+  WG_E_WG_G: "Team Mobilizer",
+  WG_E_WG_T: "Execution Support Engine",
+  WG_G_WG_T: "Launch-and-Finish Driver",
+  WG_I_WG_W: "Opportunity Inventor"
+};
+
 const QUESTIONS = [
   { id: 1, model: "mbti", trait: "E", prompt: "I gain energy from thinking out loud with others." },
   { id: 2, model: "mbti", trait: "I", prompt: "I prefer quiet time alone to recharge after a long day." },
@@ -304,7 +332,7 @@ function scoreAssessment(answers, durationMinutes) {
     const rightPct = traitTotals[pair.right].pct;
     const winner = leftPct >= rightPct ? pair.left : pair.right;
     const margin = Math.round(Math.abs(leftPct - rightPct));
-    const balanced = margin < 8;
+    const balanced = margin < MBTI_BALANCE_MARGIN;
 
     return {
       ...pair,
@@ -317,6 +345,9 @@ function scoreAssessment(answers, durationMinutes) {
   });
 
   const mbtiType = mbtiPairs.map((pair) => pair.winner).join("");
+  const mbtiTypeDisplay = mbtiPairs.map((pair) => (pair.balanced ? "X" : pair.winner)).join("");
+  const mbtiBalanceCount = mbtiPairs.filter((pair) => pair.balanced).length;
+  const mbtiConfidence = mbtiBalanceCount === 0 ? "Clear" : mbtiBalanceCount === 1 ? "Moderate" : "Blended";
 
   const discRanking = rankTraits(["D", "I_DISC", "S_DISC", "C"], traitTotals);
   const strengthsRanking = rankTraits(["EXEC", "INFL", "REL", "STRAT"], traitTotals);
@@ -345,7 +376,7 @@ function scoreAssessment(answers, durationMinutes) {
     }
   ].sort((a, b) => b.score - a.score);
 
-  return {
+  const profile = {
     answeredCount,
     totalQuestions: TOTAL_QUESTIONS,
     completionPct: Math.round((answeredCount / TOTAL_QUESTIONS) * 100),
@@ -353,6 +384,9 @@ function scoreAssessment(answers, durationMinutes) {
     traitTotals,
     mbti: {
       type: mbtiType,
+      typeDisplay: mbtiTypeDisplay,
+      confidence: mbtiConfidence,
+      balanceCount: mbtiBalanceCount,
       pairs: mbtiPairs
     },
     disc: {
@@ -372,6 +406,9 @@ function scoreAssessment(answers, durationMinutes) {
     archetypes,
     primaryArchetype: archetypes[0]
   };
+
+  profile.interpretation = deriveInterpretation(profile);
+  return profile;
 }
 
 function renderResults(localProfile, backendResult, submissionPayload) {
@@ -409,6 +446,7 @@ function renderResults(localProfile, backendResult, submissionPayload) {
       <td>${escapeHtml(TRAIT_META[pair.left].label)} ${Math.round(pair.leftPct)}%</td>
       <td>${escapeHtml(TRAIT_META[pair.right].label)} ${Math.round(pair.rightPct)}%</td>
       <td>${pair.margin}%</td>
+      <td>${pair.balanced ? "Balanced" : escapeHtml(TRAIT_META[pair.winner].label)}</td>
     </tr>
   `).join("");
 
@@ -431,6 +469,10 @@ function renderResults(localProfile, backendResult, submissionPayload) {
   const topStrengths = localProfile.strengths.topTwo.map((x) => x.label).join(", ");
   const topGenius = localProfile.workingGenius.topTwo.map((x) => x.label).join(", ");
   const lowGenius = localProfile.workingGenius.lowerEnergyTwo.map((x) => x.label).join(", ");
+  const interpretation = localProfile.interpretation || {};
+  const fitTags = (interpretation.fitTags || []).join(", ");
+  const interviewFocus = (interpretation.interviewFocus || []).join(" | ");
+  const riskFlags = (interpretation.riskFlags || []).join(", ") || "None";
 
   resultsEl.innerHTML = `
     <h2>Profile Summary</h2>
@@ -438,7 +480,7 @@ function renderResults(localProfile, backendResult, submissionPayload) {
       <span class="kpi"><strong>Candidate:</strong> ${escapeHtml(submissionPayload.candidateName)}</span>
       <span class="kpi"><strong>Version:</strong> ${escapeHtml(TEST_VERSION)}</span>
       <span class="kpi"><strong>Completed:</strong> ${localProfile.completionPct}%</span>
-      <span class="kpi"><strong>MBTI-Inspired Type:</strong> ${escapeHtml(localProfile.mbti.type)}</span>
+      <span class="kpi"><strong>MBTI-Inspired Type:</strong> ${escapeHtml(localProfile.mbti.typeDisplay || localProfile.mbti.type)} (${escapeHtml(localProfile.mbti.confidence || "Clear")})</span>
     </p>
     <p>
       <span class="kpi"><strong>DISC Primary:</strong> ${escapeHtml(localProfile.disc.primary.label)} (${localProfile.disc.primary.pct}%)</span>
@@ -450,9 +492,18 @@ function renderResults(localProfile, backendResult, submissionPayload) {
       <span class="kpi"><strong>Lower-Energy Genius Areas:</strong> ${escapeHtml(lowGenius)}</span>
       <span class="kpi"><strong>Rapid Completion:</strong> ${localProfile.rapidFlag ? "Yes" : "No"}</span>
     </p>
+    <p>
+      <span class="kpi"><strong>Profile Type:</strong> ${escapeHtml(interpretation.profileType || "N/A")}</span>
+      <span class="kpi"><strong>DISC Style:</strong> ${escapeHtml(interpretation.discStyle || "N/A")}</span>
+      <span class="kpi"><strong>Strengths Pattern:</strong> ${escapeHtml(interpretation.strengthsPattern || "N/A")}</span>
+      <span class="kpi"><strong>Working Genius Pattern:</strong> ${escapeHtml(interpretation.workingGeniusPattern || "N/A")}</span>
+    </p>
+    <p class="small"><strong>Fit Tags:</strong> ${escapeHtml(fitTags || "None")}</p>
+    <p class="small"><strong>Interview Focus:</strong> ${escapeHtml(interviewFocus || "None")}</p>
+    <p class="small"><strong>Risk Flags:</strong> ${escapeHtml(riskFlags)}</p>
 
     <table class="result-table">
-      <thead><tr><th>MBTI-Inspired Pair</th><th>Left</th><th>Right</th><th>Margin</th></tr></thead>
+      <thead><tr><th>MBTI-Inspired Pair</th><th>Left</th><th>Right</th><th>Margin</th><th>Signal</th></tr></thead>
       <tbody>${mbtiRows}</tbody>
     </table>
 
@@ -541,6 +592,126 @@ function averagePct(traits, traitTotals) {
   if (!traits.length) return 0;
   const total = traits.reduce((sum, trait) => sum + (traitTotals[trait]?.pct || 0), 0);
   return total / traits.length;
+}
+
+function deriveInterpretation(profile) {
+  const discStyle = classifyDiscStyle(profile.disc);
+  const strengthsPattern = classifyStrengthsPattern(profile.strengths);
+  const geniusPattern = classifyGeniusPattern(profile.workingGenius);
+  const fitTags = deriveFitTags(profile);
+  const interviewFocus = deriveInterviewFocus(fitTags);
+  const riskFlags = deriveRiskFlags(profile, discStyle);
+
+  return {
+    profileType: `${profile.primaryArchetype.label} | ${discStyle.styleLabel} | ${strengthsPattern.patternLabel}`,
+    discStyle: discStyle.styleLabel,
+    strengthsPattern: strengthsPattern.patternLabel,
+    workingGeniusPattern: geniusPattern.patternLabel,
+    fitTags,
+    interviewFocus,
+    riskFlags
+  };
+}
+
+function classifyDiscStyle(disc) {
+  const primary = disc.primary || { key: "", label: "N/A", pct: 0 };
+  const secondary = disc.secondary || { key: "", label: "N/A", pct: 0 };
+  const spread = Math.max(0, Number(primary.pct || 0) - Number(secondary.pct || 0));
+  const primaryStyle = DISC_STYLE_LABELS[primary.key] || primary.label;
+
+  if (spread <= DISC_BLEND_MARGIN && secondary.key) {
+    const secondaryStyle = DISC_STYLE_LABELS[secondary.key] || secondary.label;
+    return { styleLabel: `${primaryStyle}-${secondaryStyle} Blend`, spread };
+  }
+
+  return { styleLabel: primaryStyle, spread };
+}
+
+function classifyStrengthsPattern(strengths) {
+  const topTwo = strengths.topTwo || [];
+  if (topTwo.length < 2) return { patternLabel: topTwo[0]?.label || "N/A" };
+
+  const pair = buildPairKey(topTwo[0].key, topTwo[1].key);
+  const patternLabel = STRENGTHS_PAIR_LABELS[pair] || `${topTwo[0].label} + ${topTwo[1].label}`;
+  return { patternLabel };
+}
+
+function classifyGeniusPattern(workingGenius) {
+  const topTwo = workingGenius.topTwo || [];
+  if (topTwo.length < 2) return { patternLabel: topTwo[0]?.label || "N/A" };
+
+  const pair = buildPairKey(topTwo[0].key, topTwo[1].key);
+  const patternLabel = GENIUS_PAIR_LABELS[pair] || `${topTwo[0].label} + ${topTwo[1].label}`;
+  return { patternLabel };
+}
+
+function deriveFitTags(profile) {
+  const tags = [];
+  const discPrimaryKey = profile.disc.primary?.key || "";
+  const topStrengthKeys = (profile.strengths.topTwo || []).map((x) => x.key);
+  const topGeniusKeys = (profile.workingGenius.topTwo || []).map((x) => x.key);
+
+  if ((discPrimaryKey === "D" || discPrimaryKey === "C") && topStrengthKeys.includes("EXEC")) {
+    tags.push("Ops Execution");
+  }
+  if (topStrengthKeys.includes("REL") || discPrimaryKey === "S_DISC") {
+    tags.push("People Leadership");
+  }
+  if (topStrengthKeys.includes("STRAT") || topGeniusKeys.includes("WG_W") || topGeniusKeys.includes("WG_I")) {
+    tags.push("Systems Strategy");
+  }
+  if (topStrengthKeys.includes("INFL") || topGeniusKeys.includes("WG_G")) {
+    tags.push("Change Leadership");
+  }
+  if (topGeniusKeys.includes("WG_T") || topGeniusKeys.includes("WG_E")) {
+    tags.push("Delivery Reliability");
+  }
+
+  if (!tags.length) tags.push("General Management Potential");
+  return Array.from(new Set(tags));
+}
+
+function deriveInterviewFocus(fitTags) {
+  const prompts = [];
+
+  if (fitTags.includes("Ops Execution")) {
+    prompts.push("Ask for a project they owned from kickoff to completion with measurable outcomes.");
+  }
+  if (fitTags.includes("People Leadership")) {
+    prompts.push("Probe coaching style, conflict handling, and retention impact on prior teams.");
+  }
+  if (fitTags.includes("Systems Strategy")) {
+    prompts.push("Ask for a process they redesigned and how they validated improvement.");
+  }
+  if (fitTags.includes("Change Leadership")) {
+    prompts.push("Probe how they drove buy-in during a difficult change rollout.");
+  }
+  if (fitTags.includes("Delivery Reliability")) {
+    prompts.push("Validate deadline discipline and escalation behavior when plans slip.");
+  }
+
+  return prompts.slice(0, 3);
+}
+
+function deriveRiskFlags(profile, discStyle) {
+  const flags = [];
+
+  if (profile.rapidFlag) flags.push("Rapid completion");
+  if (profile.completionPct < 90) flags.push("Low completion rate");
+  if ((profile.mbti.balanceCount || 0) >= 2) flags.push("Multiple balanced MBTI pairs");
+  if ((discStyle.spread || 0) <= DISC_BLEND_MARGIN) flags.push("DISC top style is blended");
+
+  const geniusRanking = profile.workingGenius.ranking || [];
+  if (geniusRanking.length >= 2) {
+    const spread = Number(geniusRanking[0].pct || 0) - Number(geniusRanking[geniusRanking.length - 1].pct || 0);
+    if (spread < 12) flags.push("Working Genius profile is relatively flat");
+  }
+
+  return flags;
+}
+
+function buildPairKey(a, b) {
+  return [String(a || ""), String(b || "")].sort().join("_");
 }
 
 function validateCandidateEmail(email) {
