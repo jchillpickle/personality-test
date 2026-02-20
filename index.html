@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Management Systems GMA Screening</title>
+  <title>Leadership Personality Profile</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <main class="shell">
     <header>
-      <h1>Management Systems GMA Screening</h1>
-      <p>Management-focused assessment with food and beverage knowledge, systems design, and self-directed execution.</p>
+      <h1>Leadership Personality Profile</h1>
+      <p>
+        Internal assessment inspired by MBTI, DISC, CliftonStrengths, and Working Genius concepts.
+        This is a custom screener and not an official licensed or clinical instrument.
+      </p>
     </header>
 
     <section id="setup" class="card">
@@ -20,22 +23,23 @@
           <input id="candidateName" type="text" placeholder="Full name" />
         </label>
         <label>Email
-          <input id="candidateEmail" type="email" placeholder="name@email.com" />
+          <input id="candidateEmail" type="email" placeholder="name@company.com" />
         </label>
       </div>
-      <p class="small">50 questions. Time limit: 45 minutes. No calculator, no internet/AI tools. One answer per question.</p>
-      <p class="small">Competency gates: F&B knowledge, systems design, and project execution ownership.</p>
+      <p class="small">52 statements. Approx. 25-35 minutes. Answer based on your normal work behavior.</p>
+      <p class="small">Scale: 1 = Strongly Disagree, 5 = Strongly Agree.</p>
       <button id="startBtn">Start Assessment</button>
     </section>
 
     <section id="test" class="card hidden">
       <div class="topbar">
         <h2>Assessment</h2>
-        <div id="timer" class="timer">45:00</div>
+        <div id="timer" class="timer">35:00</div>
       </div>
+      <p class="small">There are no right/wrong answers. Be honest and consistent.</p>
       <form id="testForm"></form>
       <div class="actions">
-        <button id="submitBtn" type="button">Submit Test</button>
+        <button id="submitBtn" type="button">Submit Assessment</button>
       </div>
     </section>
 

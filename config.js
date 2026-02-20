@@ -1,13 +1,14 @@
-window.GMA_CONFIG = {
-  // Deployed backend endpoint.
-  submitEndpoint: "https://chill-pickle-gma-backend.onrender.com/api/submissions",
+window.PERSONALITY_CONFIG = {
+  // Example backend endpoint:
+  // "https://your-render-service.onrender.com/api/submissions"
+  submitEndpoint: "",
 
-  // Keep false for candidate-facing mode; true shows local score details.
-  showCandidateScore: false,
+  // False for candidate-facing mode. True shows profile report on completion.
+  showCandidateReport: true,
 
-  // Version tag stored with each submission for analytics comparisons.
-  testVersion: "mgmt-sys-v2-50q",
+  // Version tag stored with each submission.
+  testVersion: "personality-v1-52q",
 
-  // Keep this aligned with backend MIN_DURATION_MINUTES.
-  minDurationMinutes: 15
+  // Local rapid completion flag threshold.
+  minDurationMinutes: 8
 };

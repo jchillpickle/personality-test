@@ -1,88 +1,112 @@
-const ASSESSMENT_MINUTES = 45;
+const ASSESSMENT_MINUTES = 35;
 
-const APP_CONFIG = window.GMA_CONFIG || {};
+const APP_CONFIG = window.PERSONALITY_CONFIG || {};
 const SUBMIT_ENDPOINT = String(APP_CONFIG.submitEndpoint || "").trim();
-const SHOW_CANDIDATE_SCORE = Boolean(APP_CONFIG.showCandidateScore);
-const TEST_VERSION = String(APP_CONFIG.testVersion || "mgmt-sys-v2-50q").trim();
-const RAPID_FLAG_MINUTES = Number(APP_CONFIG.minDurationMinutes || 15);
+const SHOW_CANDIDATE_REPORT = APP_CONFIG.showCandidateReport !== false;
+const TEST_VERSION = String(APP_CONFIG.testVersion || "personality-v1-52q").trim();
+const RAPID_FLAG_MINUTES = Number(APP_CONFIG.minDurationMinutes || 8);
 
-const SECTION_ORDER = ["Numerical", "Verbal", "Logical"];
+const LIKERT_OPTIONS = [
+  { value: 1, label: "1 Strongly Disagree" },
+  { value: 2, label: "2 Disagree" },
+  { value: 3, label: "3 Neutral" },
+  { value: 4, label: "4 Agree" },
+  { value: 5, label: "5 Strongly Agree" }
+];
 
-const SECTION_WEIGHTS = {
-  Numerical: 0.3,
-  Verbal: 0.3,
-  Logical: 0.4
+const MODEL_ORDER = ["mbti", "disc", "strengths", "genius"];
+
+const MODEL_META = {
+  mbti: { title: "MBTI-Inspired Preferences" },
+  disc: { title: "DISC-Inspired Work Style" },
+  strengths: { title: "CliftonStrengths-Inspired Domains" },
+  genius: { title: "Working Genius-Inspired Stages" }
 };
 
-const COMPETENCY_META = {
-  fb: { label: "F&B Knowledge", weight: 0.25, minRatio: 0.5 },
-  systems: { label: "Systems Design", weight: 0.45, minRatio: 0.6 },
-  execution: { label: "Execution Ownership", weight: 0.3, minRatio: 0.5 }
-};
-
-const PASS_MODEL = {
-  label: "Management (F&B Systems)",
-  rawPassRatio: 15 / 24,
-  weightedPass: 70
+const TRAIT_META = {
+  E: { label: "Extraversion", model: "mbti" },
+  I: { label: "Introversion", model: "mbti" },
+  S: { label: "Sensing", model: "mbti" },
+  N: { label: "Intuition", model: "mbti" },
+  T: { label: "Thinking", model: "mbti" },
+  F: { label: "Feeling", model: "mbti" },
+  J: { label: "Judging", model: "mbti" },
+  P: { label: "Perceiving", model: "mbti" },
+  D: { label: "Dominance", model: "disc" },
+  I_DISC: { label: "Influence", model: "disc" },
+  S_DISC: { label: "Steadiness", model: "disc" },
+  C: { label: "Conscientiousness", model: "disc" },
+  EXEC: { label: "Executing", model: "strengths" },
+  INFL: { label: "Influencing", model: "strengths" },
+  REL: { label: "Relationship Building", model: "strengths" },
+  STRAT: { label: "Strategic Thinking", model: "strengths" },
+  WG_W: { label: "Wonder", model: "genius" },
+  WG_I: { label: "Invention", model: "genius" },
+  WG_D: { label: "Discernment", model: "genius" },
+  WG_G: { label: "Galvanizing", model: "genius" },
+  WG_E: { label: "Enablement", model: "genius" },
+  WG_T: { label: "Tenacity", model: "genius" }
 };
 
 const QUESTIONS = [
-  { id: 1, section: "Numerical", competency: "fb", prompt: "Weekly sales were $32,000, food COGS was $9,600, and labor was $8,000. Prime cost % =", options: ["52%", "53%", "55%", "57%"], answer: "C" },
-  { id: 2, section: "Numerical", competency: "fb", prompt: "A 120 lb seafood order yields 90 lb usable product. Yield % =", options: ["70%", "75%", "80%", "85%"], answer: "B" },
-  { id: 3, section: "Numerical", competency: "systems", prompt: "Six stations each save 5 minutes per hour after redesign. Over a 3-hour service, total minutes saved =", options: ["60", "75", "90", "120"], answer: "C" },
-  { id: 4, section: "Numerical", competency: "execution", prompt: "A project requires 36 total hours. If one manager can dedicate 9 hours per week, minimum weeks needed =", options: ["3", "4", "4.5", "5"], answer: "B" },
-  { id: 5, section: "Numerical", competency: "fb", prompt: "A cocktail sells for $15 and ingredient cost is $4.20. Beverage cost % =", options: ["24%", "26%", "28%", "30%"], answer: "C" },
-  { id: 6, section: "Numerical", competency: "systems", prompt: "Average ticket time dropped from 12 to 9 minutes across 150 tickets. Total minutes saved =", options: ["300", "360", "420", "450"], answer: "D" },
-  { id: 7, section: "Numerical", competency: "execution", prompt: "Four tasks take 2.5 hours each plus 1.5 hours QA. Two managers can each work 4 hours/day. Minimum days to finish =", options: ["1", "2", "3", "4"], answer: "B" },
-  { id: 8, section: "Numerical", competency: "fb", prompt: "Inventory variance improved from 5% to 2% on a $50,000 base. Dollar improvement =", options: ["$1,000", "$1,250", "$1,500", "$1,750"], answer: "C" },
-  { id: 9, section: "Numerical", competency: "systems", prompt: "Checklist compliance rose from 70% to 88% across 200 shifts. Additional compliant shifts =", options: ["18", "24", "30", "36"], answer: "D" },
-  { id: 10, section: "Numerical", competency: "execution", prompt: "Five deliverables each require 3 days. Two owners can work in parallel continuously. Minimum calendar days =", options: ["6", "7", "8", "9"], answer: "C" },
-  { id: 11, section: "Numerical", competency: "fb", prompt: "A dish sells for $24 and food cost is $7.20. Food cost % =", options: ["25%", "28%", "30%", "32%"], answer: "C" },
-  { id: 12, section: "Numerical", competency: "systems", prompt: "Waste dropped from 420 lb to 294 lb. Percent reduction =", options: ["20%", "30%", "35%", "40%"], answer: "B" },
-  { id: 13, section: "Numerical", competency: "execution", prompt: "Seven close tasks take 20 minutes each. Two closers split equally. Minutes per closer =", options: ["50", "60", "70", "80"], answer: "C" },
-  { id: 14, section: "Numerical", competency: "fb", prompt: "A chicken case costs $144 for 48 lb usable product. Cost per usable lb =", options: ["$2.50", "$3.00", "$3.25", "$3.50"], answer: "B" },
-  { id: 15, section: "Numerical", competency: "systems", prompt: "Forecast accuracy improved from 62% to 77%. Improvement in percentage points =", options: ["10", "12", "15", "18"], answer: "C" },
-  { id: 16, section: "Numerical", competency: "execution", prompt: "Five checkpoints occur every 3 days starting Day 0. Final checkpoint is on Day =", options: ["9", "10", "11", "12"], answer: "D" },
-  { id: 17, section: "Numerical", competency: "systems", prompt: "Parallel prep lanes: lane A totals 75 min, lane B totals 25 min. Total completion time =", options: ["40", "60", "70", "75"], answer: "D" },
+  { id: 1, model: "mbti", trait: "E", prompt: "I gain energy from thinking out loud with others." },
+  { id: 2, model: "mbti", trait: "I", prompt: "I prefer quiet time alone to recharge after a long day." },
+  { id: 3, model: "mbti", trait: "S", prompt: "I trust concrete facts before forming conclusions." },
+  { id: 4, model: "mbti", trait: "N", prompt: "I am drawn to patterns and future possibilities first." },
+  { id: 5, model: "mbti", trait: "T", prompt: "I prioritize objective criteria over personal impact when deciding." },
+  { id: 6, model: "mbti", trait: "F", prompt: "I weigh team harmony and people needs before deciding." },
+  { id: 7, model: "mbti", trait: "J", prompt: "I like defined plans, deadlines, and clear closure points." },
+  { id: 8, model: "mbti", trait: "P", prompt: "I prefer keeping options open until new information appears." },
+  { id: 9, model: "mbti", trait: "E", prompt: "In cross-functional meetings, I naturally speak early." },
+  { id: 10, model: "mbti", trait: "I", prompt: "I process my best ideas privately before sharing them." },
+  { id: 11, model: "mbti", trait: "S", prompt: "I rely on proven procedures more than experimentation." },
+  { id: 12, model: "mbti", trait: "N", prompt: "I enjoy exploring unconventional approaches to a problem." },
+  { id: 13, model: "mbti", trait: "T", prompt: "I can deliver tough feedback directly when needed." },
+  { id: 14, model: "mbti", trait: "F", prompt: "I adapt communication to preserve trust and morale." },
+  { id: 15, model: "mbti", trait: "J", prompt: "I create checklists before starting complex projects." },
+  { id: 16, model: "mbti", trait: "P", prompt: "I pivot quickly when priorities shift." },
 
-  { id: 18, section: "Verbal", competency: "execution", prompt: "Choose the strongest kickoff brief:", options: ["Improve onboarding soon.", "By June 30, cut manager onboarding from 20 to 14 days; owner: Alex; weekly milestones.", "Team should work harder.", "We will decide details later."], answer: "B" },
-  { id: 19, section: "Verbal", competency: "fb", prompt: "Policy: discard hot-held food below 135F for more than 4 hours. Chili stayed at 131F for 5 hours. Correct action:", options: ["Discard", "Reheat and serve", "Cool and reheat tomorrow", "Label and hold"], answer: "A" },
-  { id: 20, section: "Verbal", competency: "systems", prompt: "Choose the strongest root-cause statement:", options: ["Staff are careless.", "Ticket spikes occur when expo callouts vary and station setup starts late.", "Guests are difficult.", "Kitchen is unlucky."], answer: "B" },
-  { id: 21, section: "Verbal", competency: "execution", prompt: "Choose the strongest status update:", options: ["Project looks fine.", "Phase 1 complete; vendor delay risks week-3 target; mitigation approved today.", "Need help maybe.", "Everything is hard."], answer: "B" },
-  { id: 22, section: "Verbal", competency: "fb", prompt: "Low-margin items increased while sales stayed flat. Best immediate move:", options: ["Cut all labor", "Increase low-margin discounts", "Promote high-margin items and retrain upselling", "Wait until quarter close"], answer: "C" },
-  { id: 23, section: "Verbal", competency: "systems", prompt: "Which SOP line is strongest?", options: ["Check things carefully.", "Verify line temp logs by 10:30 AM and initial the checklist.", "Be professional.", "Move quickly."], answer: "B" },
-  { id: 24, section: "Verbal", competency: "execution", prompt: "Best rewrite: The rollout plan that Maya wrote it missed dependencies.", options: ["The rollout plan Maya wrote missed dependencies.", "Maya rollout wrote plan dependencies missed.", "The plan was Maya wrote it dependencies.", "Maya wrote, plan dependencies missing it."], answer: "A" },
-  { id: 25, section: "Verbal", competency: "fb", prompt: "If menu price increases 5% while unit cost stays flat, gross margin per item will most likely:", options: ["Decrease", "Increase", "Stay identical in dollars and percent", "Become negative"], answer: "B" },
-  { id: 26, section: "Verbal", competency: "systems", prompt: "Best change-management sequence:", options: ["Announce, blame, enforce", "Define target, pilot, measure, standardize", "Train first, define later", "Roll out to all stores immediately"], answer: "B" },
-  { id: 27, section: "Verbal", competency: "execution", prompt: "Strongest ownership statement:", options: ["Someone should handle this.", "I own this project and will send Friday milestone reports.", "Team can decide if needed.", "We will revisit next quarter."], answer: "B" },
-  { id: 28, section: "Verbal", competency: "fb", prompt: "A guest reports a nut allergy. Best immediate response:", options: ["Use standard prep tools", "Mark ticket allergy, sanitize station/tools, and confirm with expo", "Serve quickly before delay", "Offer item without checking ingredients"], answer: "B" },
-  { id: 29, section: "Verbal", competency: "systems", prompt: "Best KPI for reducing ticket-time variability:", options: ["Average weekly sales", "90th percentile ticket time by station", "Monthly social followers", "Total menu count"], answer: "B" },
-  { id: 30, section: "Verbal", competency: "execution", prompt: "Strongest escalation message:", options: ["This is bad.", "Risk R3 jeopardizes launch date; requesting approval for backup vendor by 3 PM.", "Can we talk soon?", "Not sure what to do."], answer: "B" },
-  { id: 31, section: "Verbal", competency: "fb", prompt: "Best control to reduce high-value inventory variance:", options: ["Weekly visual check only", "No receiving logs", "Daily count with variance sign-off", "Monthly estimate"], answer: "C" },
-  { id: 32, section: "Verbal", competency: "fb", prompt: "Pilot menu change increased contribution margin by 9% with flat traffic. Best inference:", options: ["Mix or pricing likely improved profitability", "Traffic doubled", "Labor automatically improved", "Food safety risks increased"], answer: "A" },
-  { id: 33, section: "Verbal", competency: "systems", prompt: "Primary purpose of a post-mortem after rollout:", options: ["Assign blame", "Skip future planning", "Capture lessons and system fixes", "Replace SOPs with memory"], answer: "C" },
-  { id: 34, section: "Verbal", competency: "execution", prompt: "Best phrase for deadline ownership:", options: ["We will try", "Hopefully done", "Deliverable owner and date are confirmed", "Maybe next week"], answer: "C" },
+  { id: 17, model: "disc", trait: "D", prompt: "I take charge quickly when direction is unclear." },
+  { id: 18, model: "disc", trait: "I_DISC", prompt: "I build enthusiasm and momentum through communication." },
+  { id: 19, model: "disc", trait: "S_DISC", prompt: "I stay calm and steady during long execution cycles." },
+  { id: 20, model: "disc", trait: "C", prompt: "I notice quality issues others might miss." },
+  { id: 21, model: "disc", trait: "D", prompt: "I can make decisions quickly with incomplete information." },
+  { id: 22, model: "disc", trait: "I_DISC", prompt: "I enjoy persuading people to support a plan." },
+  { id: 23, model: "disc", trait: "S_DISC", prompt: "I prefer stable routines over frequent process changes." },
+  { id: 24, model: "disc", trait: "C", prompt: "I document details to reduce avoidable mistakes." },
+  { id: 25, model: "disc", trait: "D", prompt: "I challenge assumptions when results stall." },
+  { id: 26, model: "disc", trait: "I_DISC", prompt: "I naturally network across teams and departments." },
+  { id: 27, model: "disc", trait: "S_DISC", prompt: "People can count on my follow-through week after week." },
+  { id: 28, model: "disc", trait: "C", prompt: "I hold high standards for accuracy and structure." },
 
-  { id: 35, section: "Logical", competency: "systems", prompt: "Order constraints: define KPI before pilot, pilot before SOP, SOP before training. What must be second?", options: ["Define KPI", "Pilot", "SOP", "Training"], answer: "B" },
-  { id: 36, section: "Logical", competency: "execution", prompt: "Rule: if a risk is flagged, assign mitigation owner in 24 hours. Risk flagged, no owner assigned. Conclusion:", options: ["Rule followed", "Rule violated", "Risk removed", "Cannot determine"], answer: "B" },
-  { id: 37, section: "Logical", competency: "fb", prompt: "All cooling logs require timestamps. A cooling log has none. Conclusion:", options: ["Compliant", "Noncompliant", "Only manager sign-off missing", "Cannot determine"], answer: "B" },
-  { id: 38, section: "Logical", competency: "systems", prompt: "All SOPs are version-controlled. All version-controlled docs are auditable. Therefore:", options: ["All SOPs are auditable", "No SOPs are auditable", "Only new SOPs are auditable", "Cannot infer"], answer: "A" },
-  { id: 39, section: "Logical", competency: "execution", prompt: "If a project is overdue, director is notified. Director was notified. Which must be true?", options: ["Project is overdue", "Project may or may not be overdue", "Project is complete", "Notification was invalid"], answer: "B" },
-  { id: 40, section: "Logical", competency: "systems", prompt: "Odd one out:", options: ["Runbook", "SOP", "Post-mortem", "Ladle"], answer: "D" },
-  { id: 41, section: "Logical", competency: "fb", prompt: "Par levels sequence: 20, 24, 28, 32, ?. Next value =", options: ["34", "36", "38", "40"], answer: "B" },
-  { id: 42, section: "Logical", competency: "systems", prompt: "Rule: if queue length exceeds 12, open backup line. Queue is 14 and backup line stayed closed. Conclusion:", options: ["Rule followed", "Rule violated", "Queue under 12", "Cannot determine"], answer: "B" },
-  { id: 43, section: "Logical", competency: "execution", prompt: "Constraint: Mia cannot work Tuesday. Leo must work Tuesday. Who works Tuesday?", options: ["Mia", "Leo", "Either one", "Neither"], answer: "B" },
-  { id: 44, section: "Logical", competency: "systems", prompt: "Sequence: 2, 6, 12, 20, 30, ?. Next value =", options: ["40", "41", "42", "44"], answer: "C" },
-  { id: 45, section: "Logical", competency: "fb", prompt: "All allergen tickets require manager verification. Ticket #211 has no manager verification. Conclusion:", options: ["Compliant", "Noncompliant", "Only timestamp missing", "Cannot determine"], answer: "B" },
-  { id: 46, section: "Logical", competency: "systems", prompt: "If A must finish before B, and B before C, then when C starts, what must be true?", options: ["A and B are complete", "Only B is complete", "Only A is complete", "Neither must be complete"], answer: "A" },
-  { id: 47, section: "Logical", competency: "execution", prompt: "Policy: candidate must pass all three competency minimums. Candidate misses one minimum. Decision:", options: ["Advance", "Do not advance", "Advance with coaching", "Ignore competency gate"], answer: "B" },
-  { id: 48, section: "Logical", competency: "systems", prompt: "Data points: 9, 9, 10, 12, 30. Median =", options: ["9", "10", "12", "14"], answer: "B" },
-  { id: 49, section: "Logical", competency: "fb", prompt: "Cooling standard: 135F to 70F within 2 hours, and to 41F within 6 total hours. Soup cooled in 1 hour then reached 41F by hour 5. Conclusion:", options: ["Compliant", "Noncompliant", "Needs reheating", "Cannot determine"], answer: "A" },
-  { id: 50, section: "Logical", competency: "execution", prompt: "Rule: every milestone must have an owner. Milestone 6 has no owner. Conclusion:", options: ["Rule satisfied", "Rule violated", "Only due date missing", "Cannot determine"], answer: "B" }
+  { id: 29, model: "strengths", trait: "EXEC", prompt: "I break large goals into concrete milestone plans." },
+  { id: 30, model: "strengths", trait: "INFL", prompt: "I motivate teams by painting a compelling vision." },
+  { id: 31, model: "strengths", trait: "REL", prompt: "I build trust quickly with new team members." },
+  { id: 32, model: "strengths", trait: "STRAT", prompt: "I spot multiple paths when others see one option." },
+  { id: 33, model: "strengths", trait: "EXEC", prompt: "I enjoy tracking commitments all the way to completion." },
+  { id: 34, model: "strengths", trait: "INFL", prompt: "I am comfortable presenting ideas to senior stakeholders." },
+  { id: 35, model: "strengths", trait: "REL", prompt: "I invest time in coaching and developing others." },
+  { id: 36, model: "strengths", trait: "STRAT", prompt: "I connect isolated data points into long-term strategy." },
+  { id: 37, model: "strengths", trait: "EXEC", prompt: "I push projects over the finish line under pressure." },
+  { id: 38, model: "strengths", trait: "INFL", prompt: "I rally people around change initiatives." },
+  { id: 39, model: "strengths", trait: "REL", prompt: "I notice morale shifts before they become visible problems." },
+  { id: 40, model: "strengths", trait: "STRAT", prompt: "I often ask what could happen next quarter, not just this week." },
+
+  { id: 41, model: "genius", trait: "WG_W", prompt: "I naturally question how existing systems could be better." },
+  { id: 42, model: "genius", trait: "WG_I", prompt: "I generate original ideas when solving operational problems." },
+  { id: 43, model: "genius", trait: "WG_D", prompt: "I evaluate ideas and quickly spot practical improvements." },
+  { id: 44, model: "genius", trait: "WG_G", prompt: "I energize others to commit to a new initiative." },
+  { id: 45, model: "genius", trait: "WG_E", prompt: "I jump in to support teammates so plans keep moving." },
+  { id: 46, model: "genius", trait: "WG_T", prompt: "I enjoy final details and completion work." },
+  { id: 47, model: "genius", trait: "WG_W", prompt: "I spend time identifying gaps and unmet opportunities." },
+  { id: 48, model: "genius", trait: "WG_I", prompt: "I like inventing new workflows from scratch." },
+  { id: 49, model: "genius", trait: "WG_D", prompt: "I test concepts rigorously before full rollout." },
+  { id: 50, model: "genius", trait: "WG_G", prompt: "I communicate urgency and get people moving." },
+  { id: 51, model: "genius", trait: "WG_E", prompt: "I help remove blockers for others during execution." },
+  { id: 52, model: "genius", trait: "WG_T", prompt: "I gain energy from polishing and finishing tasks." }
 ];
 
 const TOTAL_QUESTIONS = QUESTIONS.length;
-const RAW_PASS_MIN = Math.ceil(TOTAL_QUESTIONS * PASS_MODEL.rawPassRatio);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const EMAIL_TYPO_MAP = {
@@ -127,7 +151,7 @@ const startBtn = document.querySelector("#startBtn");
 const submitBtn = document.querySelector("#submitBtn");
 
 startBtn.addEventListener("click", startTest);
-submitBtn.addEventListener("click", () => submitTest(false));
+submitBtn.addEventListener("click", () => submitAssessment(false));
 
 function startTest() {
   const name = valueOf("#candidateName");
@@ -154,7 +178,7 @@ function startTest() {
     }
   }
 
-  state.presented = shuffleWithinSections(QUESTIONS);
+  state.presented = shuffleWithinModels(QUESTIONS);
   state.startedAt = Date.now();
   state.endAt = state.startedAt + ASSESSMENT_MINUTES * 60 * 1000;
 
@@ -169,37 +193,41 @@ function startTest() {
 function renderQuestions() {
   formEl.innerHTML = "";
 
-  SECTION_ORDER.forEach((section) => {
-    const header = document.createElement("h3");
-    header.textContent = section;
-    formEl.appendChild(header);
+  MODEL_ORDER.forEach((model) => {
+    const block = document.createElement("section");
+    block.className = "section-block";
+
+    const title = document.createElement("h3");
+    title.textContent = MODEL_META[model].title;
+    block.appendChild(title);
 
     state.presented
-      .filter((q) => q.section === section)
+      .filter((q) => q.model === model)
       .forEach((q) => {
         const wrapper = document.createElement("fieldset");
         wrapper.className = "question";
 
         const legend = document.createElement("p");
-        legend.innerHTML = `<strong>${q.id}.</strong> ${q.prompt}`;
+        legend.innerHTML = `<strong>${q.id}.</strong> ${escapeHtml(q.prompt)}`;
         wrapper.appendChild(legend);
 
-        const choices = document.createElement("div");
-        choices.className = "choices";
+        const scale = document.createElement("div");
+        scale.className = "scale";
 
-        q.options.forEach((opt, idx) => {
-          const code = ["A", "B", "C", "D"][idx];
-          const id = `q${q.id}_${code}`;
+        LIKERT_OPTIONS.forEach((opt) => {
+          const id = `q${q.id}_${opt.value}`;
           const label = document.createElement("label");
           label.className = "choice";
           label.setAttribute("for", id);
-          label.innerHTML = `<input id="${id}" type="radio" name="q${q.id}" value="${code}"> ${code}) ${opt}`;
-          choices.appendChild(label);
+          label.innerHTML = `<input id="${id}" type="radio" name="q${q.id}" value="${opt.value}"> ${escapeHtml(opt.label)}`;
+          scale.appendChild(label);
         });
 
-        wrapper.appendChild(choices);
-        formEl.appendChild(wrapper);
+        wrapper.appendChild(scale);
+        block.appendChild(wrapper);
       });
+
+    formEl.appendChild(block);
   });
 }
 
@@ -212,21 +240,21 @@ function tick() {
 
   if (msLeft <= 0) {
     clearInterval(state.timerId);
-    submitTest(true);
+    submitAssessment(true);
   }
 }
 
-async function submitTest(autoSubmitted) {
+async function submitAssessment(autoSubmitted) {
   clearInterval(state.timerId);
 
   const answers = {};
   QUESTIONS.forEach((q) => {
-    const checked = document.querySelector(`input[name=\"q${q.id}\"]:checked`);
-    answers[q.id] = checked ? checked.value : "";
+    const checked = document.querySelector(`input[name="q${q.id}"]:checked`);
+    answers[q.id] = checked ? Number(checked.value) : 0;
   });
 
   const durationMinutes = Math.round((Date.now() - state.startedAt) / 60000);
-  const localScore = scoreCandidate(answers, durationMinutes);
+  const localProfile = scoreAssessment(answers, durationMinutes);
 
   const submissionPayload = {
     candidateName: valueOf("#candidateName"),
@@ -244,65 +272,112 @@ async function submitTest(autoSubmitted) {
   }
 
   testEl.classList.add("hidden");
-  renderResults(localScore, backendResult, submissionPayload);
+  renderResults(localProfile, backendResult, submissionPayload);
 }
 
-function scoreCandidate(answers, durationMinutes) {
-  let raw = 0;
-
-  const sectionTotals = buildSectionTotals();
-  const competencyTotals = buildCompetencyTotals();
+function scoreAssessment(answers, durationMinutes) {
+  const traitTotals = buildTraitTotals();
+  let answeredCount = 0;
 
   QUESTIONS.forEach((q) => {
-    const isCorrect = answers[q.id] === q.answer;
-    sectionTotals[q.section].total += 1;
-    competencyTotals[q.competency].total += 1;
+    const value = Number(answers[q.id] || 0);
+    if (!Number.isInteger(value) || value < 1 || value > 5) return;
+    answeredCount += 1;
 
-    if (isCorrect) {
-      raw += 1;
-      sectionTotals[q.section].correct += 1;
-      competencyTotals[q.competency].correct += 1;
+    traitTotals[q.trait].score += value;
+    traitTotals[q.trait].count += 1;
+  });
+
+  Object.keys(traitTotals).forEach((key) => {
+    const row = traitTotals[key];
+    row.avg = row.count > 0 ? row.score / row.count : 0;
+    row.pct = row.count > 0 ? ((row.avg - 1) / 4) * 100 : 0;
+  });
+
+  const mbtiPairs = [
+    { left: "E", right: "I", label: "Energy Focus" },
+    { left: "S", right: "N", label: "Information Style" },
+    { left: "T", right: "F", label: "Decision Lens" },
+    { left: "J", right: "P", label: "Execution Preference" }
+  ].map((pair) => {
+    const leftPct = traitTotals[pair.left].pct;
+    const rightPct = traitTotals[pair.right].pct;
+    const winner = leftPct >= rightPct ? pair.left : pair.right;
+    const margin = Math.round(Math.abs(leftPct - rightPct));
+    const balanced = margin < 8;
+
+    return {
+      ...pair,
+      leftPct,
+      rightPct,
+      winner,
+      margin,
+      balanced
+    };
+  });
+
+  const mbtiType = mbtiPairs.map((pair) => pair.winner).join("");
+
+  const discRanking = rankTraits(["D", "I_DISC", "S_DISC", "C"], traitTotals);
+  const strengthsRanking = rankTraits(["EXEC", "INFL", "REL", "STRAT"], traitTotals);
+  const geniusRanking = rankTraits(["WG_W", "WG_I", "WG_D", "WG_G", "WG_E", "WG_T"], traitTotals);
+
+  const archetypes = [
+    {
+      label: "Systems Builder",
+      score: averagePct(["J", "C", "EXEC", "WG_D", "WG_T"], traitTotals),
+      summary: "Brings structure, consistency, and completion discipline."
+    },
+    {
+      label: "Growth Driver",
+      score: averagePct(["D", "N", "INFL", "WG_I", "WG_G"], traitTotals),
+      summary: "Creates momentum, pushes change, and influences direction."
+    },
+    {
+      label: "People Integrator",
+      score: averagePct(["F", "REL", "S_DISC", "WG_E", "I_DISC"], traitTotals),
+      summary: "Builds trust, alignment, and team reliability."
+    },
+    {
+      label: "Strategic Operator",
+      score: averagePct(["STRAT", "T", "C", "WG_D", "J"], traitTotals),
+      summary: "Combines analytical thinking with operational execution."
     }
-  });
-
-  let sectionWeightedScore = 0;
-  Object.keys(sectionTotals).forEach((section) => {
-    const ratio = sectionTotals[section].total > 0 ? sectionTotals[section].correct / sectionTotals[section].total : 0;
-    sectionWeightedScore += ratio * SECTION_WEIGHTS[section] * 100;
-  });
-
-  let competencyWeightedScore = 0;
-  Object.keys(competencyTotals).forEach((key) => {
-    const ratio = competencyTotals[key].total > 0 ? competencyTotals[key].correct / competencyTotals[key].total : 0;
-    competencyWeightedScore += ratio * COMPETENCY_META[key].weight * 100;
-  });
-
-  const competencyPass = Object.keys(competencyTotals).every((key) => {
-    const ratio = competencyTotals[key].total > 0 ? competencyTotals[key].correct / competencyTotals[key].total : 0;
-    return ratio >= COMPETENCY_META[key].minRatio;
-  });
-
-  const weightedScore = Math.round((sectionWeightedScore * 0.4) + (competencyWeightedScore * 0.6));
-  const rapidFlag = durationMinutes < RAPID_FLAG_MINUTES;
-  const pass = raw >= RAW_PASS_MIN && weightedScore >= PASS_MODEL.weightedPass && competencyPass;
+  ].sort((a, b) => b.score - a.score);
 
   return {
-    rawScore: raw,
-    weightedScore,
-    sectionWeightedScore: Math.round(sectionWeightedScore),
-    competencyWeightedScore: Math.round(competencyWeightedScore),
-    sectionTotals,
-    competencyTotals,
-    competencyPass,
-    rapidFlag,
-    pass
+    answeredCount,
+    totalQuestions: TOTAL_QUESTIONS,
+    completionPct: Math.round((answeredCount / TOTAL_QUESTIONS) * 100),
+    rapidFlag: durationMinutes < RAPID_FLAG_MINUTES,
+    traitTotals,
+    mbti: {
+      type: mbtiType,
+      pairs: mbtiPairs
+    },
+    disc: {
+      ranking: discRanking,
+      primary: discRanking[0],
+      secondary: discRanking[1]
+    },
+    strengths: {
+      ranking: strengthsRanking,
+      topTwo: strengthsRanking.slice(0, 2)
+    },
+    workingGenius: {
+      ranking: geniusRanking,
+      topTwo: geniusRanking.slice(0, 2),
+      lowerEnergyTwo: geniusRanking.slice(-2).reverse()
+    },
+    archetypes,
+    primaryArchetype: archetypes[0]
   };
 }
 
-function renderResults(localScore, backendResult, submissionPayload) {
+function renderResults(localProfile, backendResult, submissionPayload) {
   resultsEl.classList.remove("hidden");
 
-  if (SUBMIT_ENDPOINT && !SHOW_CANDIDATE_SCORE) {
+  if (SUBMIT_ENDPOINT && !SHOW_CANDIDATE_REPORT) {
     if (backendResult.ok) {
       const ref = backendResult.submissionId || "received";
       resultsEl.innerHTML = `
@@ -322,48 +397,87 @@ function renderResults(localScore, backendResult, submissionPayload) {
     return;
   }
 
-  const recommendation = localScore.pass ? "Advance to structured interview" : "Do not advance";
-  const competencyFlag = localScore.competencyPass ? "All competency minimums met" : "One or more competency minimums missed";
   const backendStatus = backendResult.ok
     ? `Backend submission saved (${backendResult.submissionId || "ok"}).`
     : backendResult.skipped
-      ? "No backend configured. Local scoring only."
+      ? "No backend configured. Local profiling only."
       : `Backend submission failed: ${backendResult.error}`;
 
-  const sectionRows = SECTION_ORDER.map((section) => {
-    const row = localScore.sectionTotals[section];
-    return `<tr><td>${section}</td><td>${row.correct}</td><td>${row.total}</td></tr>`;
-  }).join("");
+  const mbtiRows = localProfile.mbti.pairs.map((pair) => `
+    <tr>
+      <td>${escapeHtml(pair.label)}</td>
+      <td>${escapeHtml(TRAIT_META[pair.left].label)} ${Math.round(pair.leftPct)}%</td>
+      <td>${escapeHtml(TRAIT_META[pair.right].label)} ${Math.round(pair.rightPct)}%</td>
+      <td>${pair.margin}%</td>
+    </tr>
+  `).join("");
 
-  const competencyRows = Object.keys(COMPETENCY_META).map((key) => {
-    const row = localScore.competencyTotals[key];
-    return `<tr><td>${COMPETENCY_META[key].label}</td><td>${row.correct}</td><td>${row.total}</td><td>${Math.round(COMPETENCY_META[key].minRatio * 100)}%</td></tr>`;
-  }).join("");
+  const discRows = localProfile.disc.ranking.map((item) => `
+    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
+  `).join("");
+
+  const strengthsRows = localProfile.strengths.ranking.map((item) => `
+    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
+  `).join("");
+
+  const geniusRows = localProfile.workingGenius.ranking.map((item) => `
+    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
+  `).join("");
+
+  const archetypeRows = localProfile.archetypes.map((item) => `
+    <tr><td>${escapeHtml(item.label)}</td><td>${Math.round(item.score)}%</td><td>${escapeHtml(item.summary)}</td></tr>
+  `).join("");
+
+  const topStrengths = localProfile.strengths.topTwo.map((x) => x.label).join(", ");
+  const topGenius = localProfile.workingGenius.topTwo.map((x) => x.label).join(", ");
+  const lowGenius = localProfile.workingGenius.lowerEnergyTwo.map((x) => x.label).join(", ");
 
   resultsEl.innerHTML = `
-    <h2>Result Summary</h2>
+    <h2>Profile Summary</h2>
     <p>
       <span class="kpi"><strong>Candidate:</strong> ${escapeHtml(submissionPayload.candidateName)}</span>
-      <span class="kpi"><strong>Track:</strong> ${escapeHtml(PASS_MODEL.label)}</span>
       <span class="kpi"><strong>Version:</strong> ${escapeHtml(TEST_VERSION)}</span>
-      <span class="kpi"><strong>Raw:</strong> ${localScore.rawScore}/${TOTAL_QUESTIONS}</span>
-      <span class="kpi"><strong>Weighted:</strong> ${localScore.weightedScore}/100</span>
+      <span class="kpi"><strong>Completed:</strong> ${localProfile.completionPct}%</span>
+      <span class="kpi"><strong>MBTI-Inspired Type:</strong> ${escapeHtml(localProfile.mbti.type)}</span>
     </p>
     <p>
-      <span class="kpi"><strong>Recommendation:</strong> ${recommendation}</span>
-      <span class="kpi"><strong>Competency Gate:</strong> ${competencyFlag}</span>
-      <span class="kpi"><strong>Rapid Completion:</strong> ${localScore.rapidFlag ? "Yes" : "No"}</span>
+      <span class="kpi"><strong>DISC Primary:</strong> ${escapeHtml(localProfile.disc.primary.label)} (${localProfile.disc.primary.pct}%)</span>
+      <span class="kpi"><strong>Top Strength Domains:</strong> ${escapeHtml(topStrengths)}</span>
+      <span class="kpi"><strong>Top Working Genius:</strong> ${escapeHtml(topGenius)}</span>
     </p>
+    <p>
+      <span class="kpi"><strong>Primary Archetype:</strong> ${escapeHtml(localProfile.primaryArchetype.label)}</span>
+      <span class="kpi"><strong>Lower-Energy Genius Areas:</strong> ${escapeHtml(lowGenius)}</span>
+      <span class="kpi"><strong>Rapid Completion:</strong> ${localProfile.rapidFlag ? "Yes" : "No"}</span>
+    </p>
+
     <table class="result-table">
-      <thead><tr><th>Section</th><th>Correct</th><th>Total</th></tr></thead>
-      <tbody>${sectionRows}</tbody>
+      <thead><tr><th>MBTI-Inspired Pair</th><th>Left</th><th>Right</th><th>Margin</th></tr></thead>
+      <tbody>${mbtiRows}</tbody>
     </table>
+
     <table class="result-table">
-      <thead><tr><th>Competency</th><th>Correct</th><th>Total</th><th>Minimum</th></tr></thead>
-      <tbody>${competencyRows}</tbody>
+      <thead><tr><th>DISC-Inspired Trait</th><th>Score</th></tr></thead>
+      <tbody>${discRows}</tbody>
     </table>
-    <p class="small">Raw pass minimum: ${RAW_PASS_MIN}/${TOTAL_QUESTIONS}; weighted pass minimum: ${PASS_MODEL.weightedPass}/100.</p>
+
+    <table class="result-table">
+      <thead><tr><th>Strengths Domain</th><th>Score</th></tr></thead>
+      <tbody>${strengthsRows}</tbody>
+    </table>
+
+    <table class="result-table">
+      <thead><tr><th>Working Genius</th><th>Score</th></tr></thead>
+      <tbody>${geniusRows}</tbody>
+    </table>
+
+    <table class="result-table">
+      <thead><tr><th>Leadership Archetype</th><th>Score</th><th>Interpretation</th></tr></thead>
+      <tbody>${archetypeRows}</tbody>
+    </table>
+
     <p class="small">${escapeHtml(backendStatus)}</p>
+    <p class="small disclaimer"><strong>Note:</strong> This is a custom internal profile inspired by public frameworks. It is not an official MBTI, DISC, CliftonStrengths, or Working Genius assessment.</p>
   `;
 }
 
@@ -394,20 +508,39 @@ async function sendSubmissionToBackend(payload) {
   }
 }
 
-function buildSectionTotals() {
+function buildTraitTotals() {
   const totals = {};
-  SECTION_ORDER.forEach((section) => {
-    totals[section] = { correct: 0, total: 0 };
+  Object.keys(TRAIT_META).forEach((key) => {
+    totals[key] = {
+      trait: key,
+      label: TRAIT_META[key].label,
+      score: 0,
+      count: 0,
+      avg: 0,
+      pct: 0
+    };
   });
   return totals;
 }
 
-function buildCompetencyTotals() {
-  const totals = {};
-  Object.keys(COMPETENCY_META).forEach((key) => {
-    totals[key] = { label: COMPETENCY_META[key].label, correct: 0, total: 0 };
-  });
-  return totals;
+function rankTraits(traitKeys, traitTotals) {
+  return traitKeys
+    .map((key) => ({
+      key,
+      label: TRAIT_META[key].label,
+      pct: Math.round(traitTotals[key].pct),
+      avg: traitTotals[key].avg
+    }))
+    .sort((a, b) => {
+      if (b.pct !== a.pct) return b.pct - a.pct;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+function averagePct(traits, traitTotals) {
+  if (!traits.length) return 0;
+  const total = traits.reduce((sum, trait) => sum + (traitTotals[trait]?.pct || 0), 0);
+  return total / traits.length;
 }
 
 function validateCandidateEmail(email) {
@@ -425,8 +558,8 @@ function suggestEmailCorrection(email) {
   const parts = email.split("@");
   if (parts.length !== 2) return "";
 
-  const [local, domainRaw] = parts;
-  const domain = domainRaw.toLowerCase();
+  const local = parts[0];
+  const domain = parts[1].toLowerCase();
 
   if (EMAIL_TYPO_MAP[domain]) {
     return `${local}@${EMAIL_TYPO_MAP[domain]}`;
@@ -479,10 +612,10 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 
-function shuffleWithinSections(input) {
+function shuffleWithinModels(input) {
   const out = [];
-  SECTION_ORDER.forEach((section) => {
-    const subset = input.filter((q) => q.section === section);
+  MODEL_ORDER.forEach((model) => {
+    const subset = input.filter((q) => q.model === model);
     shuffleInPlace(subset);
     out.push(...subset);
   });
@@ -492,7 +625,9 @@ function shuffleWithinSections(input) {
 function shuffleInPlace(arr) {
   for (let i = arr.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
   }
 }
 
