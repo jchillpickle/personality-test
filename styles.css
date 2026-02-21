@@ -46,6 +46,23 @@ header p {
   box-shadow: 0 8px 18px rgba(20, 33, 43, 0.05);
 }
 
+.optional-panel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fbfd;
+}
+
+.optional-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.optional-grid {
+  margin-top: 10px;
+}
+
 .grid {
   display: grid;
   gap: 12px;
@@ -169,6 +186,78 @@ button:hover {
   text-align: left;
   border-bottom: 1px solid var(--border);
   padding: 8px;
+}
+
+.report-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 12px;
+}
+
+.report-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdfe;
+}
+
+.report-card h3 {
+  margin: 0 0 10px;
+}
+
+.bar-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bar-row {
+  display: grid;
+  gap: 4px;
+}
+
+.bar-row-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.bar-track {
+  width: 100%;
+  background: #e8f0f5;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0d5c63, #3a8e95);
+}
+
+.pair-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.pair-pill {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.76rem;
+  background: #f7fbfd;
+}
+
+.calibration-box {
+  margin-top: 12px;
+  border: 1px solid #c9dce8;
+  background: #f3f9fe;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 .disclaimer {
