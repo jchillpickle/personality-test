@@ -26,6 +26,23 @@
           <input id="candidateEmail" type="email" placeholder="name@company.com" />
         </label>
       </div>
+      <details class="optional-panel">
+        <summary>Optional: Known Assessment Results (for calibration)</summary>
+        <div class="grid optional-grid">
+          <label>Known MBTI Type
+            <input id="knownMbti" type="text" placeholder="example: ENTJ" maxlength="8" />
+          </label>
+          <label>Known DISC Style
+            <input id="knownDisc" type="text" placeholder="example: D or SI blend" maxlength="40" />
+          </label>
+          <label>Known Clifton Top Strengths
+            <input id="knownStrengths" type="text" placeholder="comma separated (example: Strategic, Achiever)" maxlength="180" />
+          </label>
+          <label>Known Working Genius Top Two
+            <input id="knownGenius" type="text" placeholder="comma separated (example: Discernment, Galvanizing)" maxlength="180" />
+          </label>
+        </div>
+      </details>
       <p class="small">52 statements. Approx. 25-35 minutes. Answer based on your normal work behavior.</p>
       <p class="small">Scale: 1 = Strongly Disagree, 5 = Strongly Agree.</p>
       <button id="startBtn">Start Assessment</button>
