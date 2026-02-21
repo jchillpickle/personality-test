@@ -76,6 +76,37 @@ const GENIUS_PAIR_LABELS = {
   WG_I_WG_W: "Opportunity Inventor"
 };
 
+const STRENGTH_KEY_ALIASES = {
+  executing: "EXEC",
+  execution: "EXEC",
+  achiever: "EXEC",
+  discipline: "EXEC",
+  responsibility: "EXEC",
+  influencing: "INFL",
+  influence: "INFL",
+  communication: "INFL",
+  woo: "INFL",
+  relator: "REL",
+  empathy: "REL",
+  developer: "REL",
+  relationship: "REL",
+  strategic: "STRAT",
+  intellection: "STRAT",
+  learner: "STRAT",
+  ideation: "STRAT"
+};
+
+const GENIUS_KEY_ALIASES = {
+  wonder: "WG_W",
+  invention: "WG_I",
+  invent: "WG_I",
+  discernment: "WG_D",
+  galvanizing: "WG_G",
+  galvanizer: "WG_G",
+  enablement: "WG_E",
+  tenacity: "WG_T"
+};
+
 const QUESTIONS = [
   { id: 1, model: "mbti", trait: "E", prompt: "I gain energy from thinking out loud with others." },
   { id: 2, model: "mbti", trait: "I", prompt: "I prefer quiet time alone to recharge after a long day." },
@@ -281,8 +312,9 @@ async function submitAssessment(autoSubmitted) {
     answers[q.id] = checked ? Number(checked.value) : 0;
   });
 
+  const knownAssessments = collectKnownAssessments();
   const durationMinutes = Math.round((Date.now() - state.startedAt) / 60000);
-  const localProfile = scoreAssessment(answers, durationMinutes);
+  const localProfile = scoreAssessment(answers, durationMinutes, knownAssessments);
 
   const submissionPayload = {
     candidateName: valueOf("#candidateName"),
@@ -291,6 +323,7 @@ async function submitAssessment(autoSubmitted) {
     durationMinutes,
     autoSubmitted,
     answers,
+    knownAssessments,
     testVersion: TEST_VERSION
   };
 
@@ -303,7 +336,7 @@ async function submitAssessment(autoSubmitted) {
   renderResults(localProfile, backendResult, submissionPayload);
 }
 
-function scoreAssessment(answers, durationMinutes) {
+function scoreAssessment(answers, durationMinutes, knownAssessments) {
   const traitTotals = buildTraitTotals();
   let answeredCount = 0;
 
@@ -408,6 +441,7 @@ function scoreAssessment(answers, durationMinutes) {
   };
 
   profile.interpretation = deriveInterpretation(profile);
+  profile.calibration = deriveCalibration(profile, knownAssessments);
   return profile;
 }
 
@@ -440,7 +474,16 @@ function renderResults(localProfile, backendResult, submissionPayload) {
       ? "No backend configured. Local profiling only."
       : `Backend submission failed: ${backendResult.error}`;
 
-  const mbtiRows = localProfile.mbti.pairs.map((pair) => `
+  const topStrengths = localProfile.strengths.topTwo.map((x) => x.label).join(", ");
+  const topGenius = localProfile.workingGenius.topTwo.map((x) => x.label).join(", ");
+  const lowGenius = localProfile.workingGenius.lowerEnergyTwo.map((x) => x.label).join(", ");
+  const interpretation = localProfile.interpretation || {};
+  const fitTags = (interpretation.fitTags || []).join(", ") || "None";
+  const interviewFocus = (interpretation.interviewFocus || []).join(" | ") || "None";
+  const riskFlags = (interpretation.riskFlags || []).join(", ") || "None";
+  const calibration = localProfile.calibration || { hasKnown: false };
+
+  const mbtiTableRows = localProfile.mbti.pairs.map((pair) => `
     <tr>
       <td>${escapeHtml(pair.label)}</td>
       <td>${escapeHtml(TRAIT_META[pair.left].label)} ${Math.round(pair.leftPct)}%</td>
@@ -450,29 +493,9 @@ function renderResults(localProfile, backendResult, submissionPayload) {
     </tr>
   `).join("");
 
-  const discRows = localProfile.disc.ranking.map((item) => `
-    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
-  `).join("");
-
-  const strengthsRows = localProfile.strengths.ranking.map((item) => `
-    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
-  `).join("");
-
-  const geniusRows = localProfile.workingGenius.ranking.map((item) => `
-    <tr><td>${escapeHtml(item.label)}</td><td>${item.pct}%</td></tr>
-  `).join("");
-
   const archetypeRows = localProfile.archetypes.map((item) => `
     <tr><td>${escapeHtml(item.label)}</td><td>${Math.round(item.score)}%</td><td>${escapeHtml(item.summary)}</td></tr>
   `).join("");
-
-  const topStrengths = localProfile.strengths.topTwo.map((x) => x.label).join(", ");
-  const topGenius = localProfile.workingGenius.topTwo.map((x) => x.label).join(", ");
-  const lowGenius = localProfile.workingGenius.lowerEnergyTwo.map((x) => x.label).join(", ");
-  const interpretation = localProfile.interpretation || {};
-  const fitTags = (interpretation.fitTags || []).join(", ");
-  const interviewFocus = (interpretation.interviewFocus || []).join(" | ");
-  const riskFlags = (interpretation.riskFlags || []).join(", ") || "None";
 
   resultsEl.innerHTML = `
     <h2>Profile Summary</h2>
@@ -498,28 +521,38 @@ function renderResults(localProfile, backendResult, submissionPayload) {
       <span class="kpi"><strong>Strengths Pattern:</strong> ${escapeHtml(interpretation.strengthsPattern || "N/A")}</span>
       <span class="kpi"><strong>Working Genius Pattern:</strong> ${escapeHtml(interpretation.workingGeniusPattern || "N/A")}</span>
     </p>
-    <p class="small"><strong>Fit Tags:</strong> ${escapeHtml(fitTags || "None")}</p>
-    <p class="small"><strong>Interview Focus:</strong> ${escapeHtml(interviewFocus || "None")}</p>
+    <p class="small"><strong>Fit Tags:</strong> ${escapeHtml(fitTags)}</p>
+    <p class="small"><strong>Interview Focus:</strong> ${escapeHtml(interviewFocus)}</p>
     <p class="small"><strong>Risk Flags:</strong> ${escapeHtml(riskFlags)}</p>
+
+    ${buildCalibrationBox(calibration)}
+
+    <div class="report-grid">
+      <div class="report-card">
+        <h3>MBTI Pair Graph</h3>
+        <div class="bar-list">${buildMbtiPairBars(localProfile.mbti.pairs)}</div>
+      </div>
+      <div class="report-card">
+        <h3>DISC Graph</h3>
+        <div class="bar-list">${buildBarRows(localProfile.disc.ranking)}</div>
+      </div>
+      <div class="report-card">
+        <h3>Strengths Domains Graph</h3>
+        <div class="bar-list">${buildBarRows(localProfile.strengths.ranking)}</div>
+      </div>
+      <div class="report-card">
+        <h3>Working Genius Graph</h3>
+        <div class="bar-list">${buildBarRows(localProfile.workingGenius.ranking)}</div>
+      </div>
+      <div class="report-card">
+        <h3>Archetype Fit Graph</h3>
+        <div class="bar-list">${buildArchetypeBars(localProfile.archetypes)}</div>
+      </div>
+    </div>
 
     <table class="result-table">
       <thead><tr><th>MBTI-Inspired Pair</th><th>Left</th><th>Right</th><th>Margin</th><th>Signal</th></tr></thead>
-      <tbody>${mbtiRows}</tbody>
-    </table>
-
-    <table class="result-table">
-      <thead><tr><th>DISC-Inspired Trait</th><th>Score</th></tr></thead>
-      <tbody>${discRows}</tbody>
-    </table>
-
-    <table class="result-table">
-      <thead><tr><th>Strengths Domain</th><th>Score</th></tr></thead>
-      <tbody>${strengthsRows}</tbody>
-    </table>
-
-    <table class="result-table">
-      <thead><tr><th>Working Genius</th><th>Score</th></tr></thead>
-      <tbody>${geniusRows}</tbody>
+      <tbody>${mbtiTableRows}</tbody>
     </table>
 
     <table class="result-table">
@@ -592,6 +625,236 @@ function averagePct(traits, traitTotals) {
   if (!traits.length) return 0;
   const total = traits.reduce((sum, trait) => sum + (traitTotals[trait]?.pct || 0), 0);
   return total / traits.length;
+}
+
+function collectKnownAssessments() {
+  return normalizeKnownAssessments({
+    mbti: valueOf("#knownMbti"),
+    disc: valueOf("#knownDisc"),
+    strengths: valueOf("#knownStrengths"),
+    workingGenius: valueOf("#knownGenius")
+  });
+}
+
+function normalizeKnownAssessments(input) {
+  const raw = input || {};
+  const strengths = parseCommaList(raw.strengths).slice(0, 8);
+  const workingGenius = parseCommaList(raw.workingGenius).slice(0, 8);
+
+  return {
+    mbti: String(raw.mbti || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4),
+    disc: String(raw.disc || "").toUpperCase().replace(/[^-A-Z/ ]/g, "").slice(0, 24),
+    strengths,
+    workingGenius
+  };
+}
+
+function parseCommaList(value) {
+  return String(value || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function deriveCalibration(profile, knownAssessments) {
+  const known = normalizeKnownAssessments(knownAssessments);
+  const hasKnown = Boolean(known.mbti || known.disc || known.strengths.length || known.workingGenius.length);
+
+  if (!hasKnown) {
+    return {
+      hasKnown: false,
+      known,
+      mbtiMatch: null,
+      discMatch: null,
+      strengthsMatch: null,
+      geniusMatch: null,
+      overall: null
+    };
+  }
+
+  const mbtiMatch = scoreMbtiAlignment(profile.mbti, known.mbti);
+  const discMatch = scoreDiscAlignment(profile.disc, known.disc);
+  const strengthsMatch = scoreListAlignment(profile.strengths.topTwo, known.strengths, STRENGTH_KEY_ALIASES);
+  const geniusMatch = scoreListAlignment(profile.workingGenius.topTwo, known.workingGenius, GENIUS_KEY_ALIASES);
+
+  const measures = [mbtiMatch, discMatch, strengthsMatch, geniusMatch].filter((x) => x && Number.isFinite(x.score));
+  const overallScore = measures.length
+    ? Math.round(measures.reduce((sum, m) => sum + m.score, 0) / measures.length)
+    : null;
+
+  const overallBand = overallScore === null
+    ? "N/A"
+    : overallScore >= 80
+      ? "High Alignment"
+      : overallScore >= 60
+        ? "Moderate Alignment"
+        : "Low Alignment";
+
+  return {
+    hasKnown: true,
+    known,
+    mbtiMatch,
+    discMatch,
+    strengthsMatch,
+    geniusMatch,
+    overall: overallScore === null ? null : { score: overallScore, band: overallBand }
+  };
+}
+
+function scoreMbtiAlignment(mbti, knownMbti) {
+  if (!knownMbti || knownMbti.length < 2) return null;
+
+  const predicted = String(mbti.type || "");
+  const known = String(knownMbti || "");
+  const len = Math.min(predicted.length, known.length, 4);
+  if (!len) return null;
+
+  let matched = 0;
+  for (let idx = 0; idx < len; idx += 1) {
+    const knownLetter = known[idx];
+    const predictedLetter = predicted[idx];
+    const isBalanced = mbti.pairs?.[idx]?.balanced;
+
+    if (knownLetter === predictedLetter) {
+      matched += 1;
+      continue;
+    }
+    if (isBalanced && "EISNTFJP".includes(knownLetter)) {
+      matched += 0.5;
+    }
+  }
+
+  const score = Math.round((matched / len) * 100);
+  return { score, detail: `${Math.round(matched * 10) / 10}/${len} letters aligned` };
+}
+
+function scoreDiscAlignment(disc, knownDisc) {
+  if (!knownDisc) return null;
+  const knownTokens = extractDiscTokens(knownDisc);
+  if (!knownTokens.length) return null;
+
+  const primary = String(disc.primary?.key || "");
+  const secondary = String(disc.secondary?.key || "");
+  const mappedPrimary = mapDiscKey(primary);
+  const mappedSecondary = mapDiscKey(secondary);
+
+  let score = 0;
+  if (knownTokens.includes(mappedPrimary)) score = 100;
+  else if (knownTokens.includes(mappedSecondary)) score = 70;
+  else score = 20;
+
+  return { score, detail: `Known ${knownTokens.join("/")}, predicted ${mappedPrimary}${mappedSecondary ? `/${mappedSecondary}` : ""}` };
+}
+
+function extractDiscTokens(value) {
+  const v = String(value || "").toUpperCase();
+  const tokens = [];
+  if (v.includes("D")) tokens.push("D");
+  if (v.includes("I")) tokens.push("I");
+  if (v.includes("S")) tokens.push("S");
+  if (v.includes("C")) tokens.push("C");
+  return Array.from(new Set(tokens));
+}
+
+function mapDiscKey(key) {
+  if (key === "I_DISC") return "I";
+  if (key === "S_DISC") return "S";
+  return key;
+}
+
+function scoreListAlignment(predictedTopTwo, knownList, aliasMap) {
+  const knownKeys = knownList
+    .map((label) => mapAliasToKey(label, aliasMap))
+    .filter(Boolean);
+
+  if (!knownKeys.length) return null;
+
+  const predictedKeys = (predictedTopTwo || []).map((x) => x.key);
+  let matches = 0;
+  knownKeys.forEach((key) => {
+    if (predictedKeys.includes(key)) matches += 1;
+  });
+
+  const denom = Math.min(2, knownKeys.length);
+  const score = Math.round((matches / denom) * 100);
+  return { score, detail: `${matches}/${denom} top areas aligned` };
+}
+
+function mapAliasToKey(label, aliasMap) {
+  const key = String(label || "").trim().toLowerCase();
+  if (!key) return "";
+  return aliasMap[key] || "";
+}
+
+function buildBarRows(items) {
+  return (items || []).map((item) => `
+    <div class="bar-row">
+      <div class="bar-row-head"><span>${escapeHtml(item.label)}</span><span>${Math.round(item.pct)}%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${clampPct(item.pct)}%"></div></div>
+    </div>
+  `).join("");
+}
+
+function buildArchetypeBars(items) {
+  return (items || []).map((item) => `
+    <div class="bar-row">
+      <div class="bar-row-head"><span>${escapeHtml(item.label)}</span><span>${Math.round(item.score)}%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${clampPct(item.score)}%"></div></div>
+    </div>
+  `).join("");
+}
+
+function buildMbtiPairBars(pairs) {
+  return (pairs || []).map((pair) => {
+    const left = Math.round(pair.leftPct);
+    const right = Math.round(pair.rightPct);
+    const winnerLabel = pair.balanced ? "Balanced" : TRAIT_META[pair.winner].label;
+    return `
+      <div class="bar-row">
+        <div class="bar-row-head">
+          <span>${escapeHtml(TRAIT_META[pair.left].label)} vs ${escapeHtml(TRAIT_META[pair.right].label)}</span>
+          <span><span class="pair-pill">${escapeHtml(winnerLabel)}</span></span>
+        </div>
+        <div class="pair-row">
+          <span>${left}%</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${clampPct(Math.max(left, right))}%"></div></div>
+          <span>${right}%</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function buildCalibrationBox(calibration) {
+  if (!calibration?.hasKnown) {
+    return `<p class="small">No known baseline assessments provided for calibration comparison.</p>`;
+  }
+
+  const overall = calibration.overall
+    ? `${calibration.overall.score}% (${calibration.overall.band})`
+    : "N/A";
+
+  return `
+    <div class="calibration-box">
+      <h3>Calibration Against Known Assessments</h3>
+      <p class="small"><strong>Overall Alignment:</strong> ${escapeHtml(overall)}</p>
+      <p class="small"><strong>MBTI Match:</strong> ${escapeHtml(formatCalibrationMeasure(calibration.mbtiMatch))}</p>
+      <p class="small"><strong>DISC Match:</strong> ${escapeHtml(formatCalibrationMeasure(calibration.discMatch))}</p>
+      <p class="small"><strong>Strengths Match:</strong> ${escapeHtml(formatCalibrationMeasure(calibration.strengthsMatch))}</p>
+      <p class="small"><strong>Working Genius Match:</strong> ${escapeHtml(formatCalibrationMeasure(calibration.geniusMatch))}</p>
+    </div>
+  `;
+}
+
+function formatCalibrationMeasure(measure) {
+  if (!measure) return "N/A";
+  return `${measure.score}% - ${measure.detail}`;
+}
+
+function clampPct(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
 }
 
 function deriveInterpretation(profile) {
